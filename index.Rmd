@@ -1,15 +1,10 @@
 ---
 title: 'Practical Machine Learning: Motion Analysis'
 author: "Christina Brady"
-date: "December 27, 2015"
+date: "June 3, 2016"
 output: html_document
 ---
-```{r, echo = FALSE, cache = TRUE}
-library(caret)
-library(doMC)
-registerDoMC(cores = 4)
-set.seed(1979)
-options(warn = -1)
+```{r include = FALSE, cache= FALSE}
 source("../project/report_code.R")
 ```
 # 1. Executive Summary
@@ -20,16 +15,16 @@ The objective of this analysis is to use data collected from human recognition a
 I downloaded the data from the class website in csv format and read it into R. The initial dataset contains 19622 observations on 159 variables. The first six variables include the name of the participant, various time stamps and window classifications used by the authors of the study. Many of the other variables are composite or calculated variables such as minimun, maximum, mean or totals. Of the variables that are some form of data from the sensors, some variables imported as character, others imported as numeric and finally others imported as integer variables. By converting them all to numeric variables, I was able to determine that many of the variables have very sparse data.
 
 # 3. Feature Selection
-As mentioned above, there are three types of time stamp variables. A frequency table of user name, cvtd timestamp and classe shows that each person started with class A and then moved on to other classes. 
+As mentioned above, there are three types of time stamp variables. The raw_time_stamp_part1 is a numeric variable that starts at 1322489605 and increments by 1 until it reaches 1323095081. There is no discernable pattern in the frequency of the values. Similarly, there is no discernable pattern between raw_timestamp_part1 and raw_timestamp_part2. Finally, a frequency table of user name, cvtd timestamp and classe shows that this timestamp is probably incomplete. A number of timestamps have no data and each user's data occurs exclusively 2-3 minute windows, often with different "performances" occurring during the same time stamp.
 
 ```{r}
-table(pml$cvtd_timestamp, pml$classe, pml$user_name)[1:10, , 1]
+table(pml$cvtd_timestamp, pml$classe, pml$user_name)[, , 1]
 ```
 
-Thus, the user names and time stamp will correlate highly with the class of the activity and would lead to over fitting, and should not be included in the analysis.
+Thus, I decided to eliminate the timestamps. Furthermore, each person appears to have completed the exercises at different times. As a result, using the username and or the cvtd_timestamp would probably lead to overfitting.
 
 Next, using the following code, I determined which columns contain a significant number of missing values and eliminated those variable from the analysis. 
-```{r}
+```{r, eval = FALSE}
 natest <- function(c){
   return(as.character(summary(c)[7]))
 }
@@ -46,8 +41,9 @@ createNAcolmap <- function(dat){
   names(map) <- colnames(dat)
   return(map[!is.na(map)])  
 }
+
 nacolmap <- createNAcolmap(training)
-elim_name <- c("raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window", "raw_timestamp_part_1", "user_name") ### eliminate after 
+elim_name <- c("raw_timestamp_part_2", "cvtd_timestamp", "num_window", "raw_timestamp_part_1", "user_name") 
 
 
 clean <- function(dat){
@@ -59,30 +55,17 @@ clean <- function(dat){
 cleantraining <- clean(training)
 ```
 
-That left 53 variables, so I trimmed those variables using the variable importance option in the random forest model. 
-```{r}
-rf7varImport <- train(classe~., method = "rf", data = cleantraining2, ntree = 100, importance = TRUE)
-plot(rf7varImport)
-```
-This suggests that a model with 28 variables produces the best result. So, I took the mean importance across all 5 classes, ordered the variables according to the mean importance and extracted the top 28 variables. That left me with the following variables:
-```{r}
-varnames
-```
+I also eliminated the rows where the new_window value was "yes" because that also correlated highly with missing values. 
 
 # 4. Building the Model
-I used the caret packages to split the data and train the model. Since the course provides a test set, I split the data as if I had a training set (80%), a cross validation set (20%) and a test set (unknown). I trained the model on the subset of the training data containing only the 28 variables mentioned above, and I tested my model on a subset of the test set also containing only the 28 variables mentioned above. 
+I used the caret packages to split the data and train the model. Since the course provides a test set, I split the data as if I had a training set (80%), a cross validation set (20%) and a test set (unknown). I tested 1. a random forest with 100 trees on the clean data, 2. a random forest on the clean data with cross validation and 100 trees, and 3. a random forest using variables selected through principle component analysis (with 100 trees). 
 
 # 5. Results
-The accuracy of this model on this test set is 0.9962. 
-```{r}
-pred1 <- predict(lastrf, newdata = testsub)
-confusionMatrix(pred1, testsub$classe)
-```
+The first two models returned an accuracy of 0.9977 on my validation set. Both models erred in very similar ways. The same accuracy and very similar errors made me suspect that were overfitting. I confirmed my suspicion when I ran used the model to predict the test data and submitted it to Coursera. The last model performed the best. The accuracy of this model on this test set is 0.98 on my validation set and 0.95 on the test set.
 
-Using the miss classification error, the out of sample error rate is:
 ```{r}
-missClass <- sum(pred1 != testsub$classe)/length(pred1)
-missClass
+library(caret)
+confusionMatrix(predb, cleantesting$classe)
 ```
 
 

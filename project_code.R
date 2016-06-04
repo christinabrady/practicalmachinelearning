@@ -124,3 +124,26 @@ confusionMatrix(pred1, testsub$classe)
 
 # original paper used 10 random forests calculated with 10 trees each with bagging
 # classifer tested with 10 fold cross-validation with windows with 0.5s overlap
+
+
+################## run testing data
+realtest <- read.csv("pml-testing.csv")
+
+clean <- function(dat){
+#   dat$classe <- factor(dat$classe)
+  nonas <- dat[,!(colnames(dat) %in% names(nacolmap))]
+  return(nonas[, !(colnames(nonas) %in% elim_name)])
+}
+testdata <- clean(realtest)
+finaltest <- testdata[, varnames]
+predictions <- predict(lastrf, newdata = finaltest)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictions)

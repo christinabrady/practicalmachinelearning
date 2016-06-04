@@ -1,13 +1,18 @@
 ### report code:
 library(caret)
 library(doMC)
+library(randomForest)
 registerDoMC(cores = 4)
 set.seed(1979)
+options(warn = -1)
 
 setwd("~/Documents/courses/Practical Machine Learning")
 options(stringsAsFactors = FALSE)
 pml <- read.csv("pml-training.csv", header = TRUE)
 
+
+## the first variable is empty
+pml <- pml[, 2:ncol(pml)]
 
 inTrain <- createDataPartition(y = pml$classe, p = .8, list = FALSE)
 training <- pml[inTrain,]
@@ -36,7 +41,7 @@ createNAcolmap <- function(dat){
 
 ########################################### clean data ######################################
 nacolmap <- createNAcolmap(training)
-elim_name <- c("raw_timestamp_part_2", "cvtd_timestamp", "new_window", "num_window", "raw_timestamp_part_1", "user_name") ### eliminate after series column is created 
+elim_name <- c("raw_timestamp_part_2", "cvtd_timestamp", "new_window", "raw_timestamp_part_1", "user_name") ### eliminate after series column is created 
 
 clean <- function(dat){
   dat$classe <- factor(dat$classe)
@@ -44,23 +49,16 @@ clean <- function(dat){
   return(nonas[, !(colnames(nonas) %in% elim_name)])
 }
 
-cleantraining2 <- clean(training)
-cleantesting <- clean(testing)
+cleantraining <- clean(training)
+cleantesting <- clean(testing) 
+
 
 ##################################### model training and tuning ####################
-rf7varImport <- train(classe~., method = "rf", data = cleantraining2, ntree = 100, importance = TRUE)
-
-############ variable importance ################
-varimpobj <- varImp(rf7varImport)$importance
-varimpobj$ave <- apply(varimpobj, 1, mean)
-varimpobj <- varimpobj[order(varimpobj$ave, decreasing = TRUE), ]
-varnames <- rownames(varimpobj)[1:28]
-varimportsub <- cleantraining2[, c("classe", varnames)]
-
-############# new model ###################
-lastrf <- train(classe~., data = varimportsub, ntree = 100)
-
-testsub <- cleantesting[, c("classe", varnames)]
-pred1 <- predict(lastrf, newdata = testsub)
+pp <- preProcess(cleantraining, method = "pca")
+trainingpp <- predict(pp, newdata = cleantraining)
+rf2 <- randomForest(classe~., data = trainingpp, ntree = 100)
+testpp <- predict(pp, newdata = cleantesting[, 1:53])  ## run pca on the validation set not including the classe variable
+predb <- predict(rf2, newdata = testpp)
+confusionMatrix(predb, cleantesting$classe)  ## 98.02%
 
 
